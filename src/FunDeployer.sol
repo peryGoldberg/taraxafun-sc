@@ -9,8 +9,8 @@ import {IFunStorageInterface} from "./interfaces/IFunStorageInterface.sol";
 import {IFunEventTracker} from "./interfaces/IFunEventTracker.sol";
 
 contract FunDeployer is Ownable {
-
-    event funCreated(
+// הפונקציה יוצרת טוקן חדש עם שוק נזילות ראשוני, תוך ווידוא עמידה בתנאים פיננסיים.
+    event funCreated( //אירוע יצירת הטוקן
         address indexed creator,
         address indexed funContract,
         address indexed tokenAddress,
@@ -22,7 +22,7 @@ contract FunDeployer is Ownable {
         uint256 timestamp
     );
 
-    event royal(
+    event royal( //אירוע הטוקן שנוצר
         address indexed tokenAddress, 
         uint256 liquidityAmount,
         uint256 tokenAmount, 
@@ -65,7 +65,7 @@ contract FunDeployer is Ownable {
         eventTracker = _eventTracker;
     }
 
-    function createFun(
+    function createFun( //פונקציה ליצירת הטוקן- מקבלת את פרטי הטוקן החדש
         string memory _name,
         string memory _symbol,
         string memory _data,
@@ -73,24 +73,33 @@ contract FunDeployer is Ownable {
         uint256 _liquidityETHAmount,
         uint256 _amountAntiSnipe,
         uint256 _maxBuyPerWallet
-    ) public payable {
+    ) public payable { 
+        // הפונקציה מקבלת נתוני טוקן חדשים (שם, סמל, היצע וכו') ומוודאת שהם בתחום ההגבלות
+       //בודקת:
+       // שהמשתמש לא עובר את הגבלת ה-אנטי סניפ  (קנייה אוטומטית נגד בוטים).
+       // שהמשתמש שילם לפחות את העמלות והנזילות הנדרשות
         require(_amountAntiSnipe <= ((initialReserveTARA * antiSnipePer) / 10000), "over antisnipe restrictions");
         require(msg.value >= (deploymentFee + _liquidityETHAmount + _amountAntiSnipe), "fee amount error");
-
-        if (_maxBuyPerWallet == 0) {
+    //אם לא מאותחל, הוא מקבל ברירת מחדל של כל ההיצע
+        if (_maxBuyPerWallet == 0) { 
             _maxBuyPerWallet = _totalSupply;
         }
-
+    //feeWallet משתמש בפונקציה  כאל כדי לשלוח עמלה לכתובת .
+    //אם התשלום נכשל require יפסיק את הביצוע
         (bool feeSuccess,) = feeWallet.call{value: deploymentFee}("");
         require(feeSuccess, "creation fee failed");
-
+    //קורא לחוזה IFunPool ליצירת טוקן חדש.
+//מעביר את שם הטוקן, הסמל, הכמות הכוללת והגבלות שונות.
+//מצרף נזילות ראשונית (_liquidityETHAmount) כדי להתחיל מסחר.
+//מחזיר את הכתובת של חוזה הטוקן החדש (funToken
         address funToken = IFunPool(funPool).initFun{value: _liquidityETHAmount}(
             [_name, _symbol], _totalSupply, msg.sender, [listThreshold, initialReserveTARA], _maxBuyPerWallet
         );
-
+//שומר את המידע במערכת הסטורג כדי שאפשר יהיה לחפש ולעבוד עם הטוקן בעתיד.
         IFunStorageInterface(funStorage).addFunContract(
             msg.sender, (funToken), funToken, _name, _symbol, _data, _totalSupply, _liquidityETHAmount
         );
+// רושם את האירוע  כדי שיהיה ניתן לראות בלוגים של הבלוקצ'יין את יצירת הטוקן.
 
         IFunEventTracker(eventTracker).createFunEvent(
             msg.sender,
@@ -109,10 +118,10 @@ contract FunDeployer is Ownable {
             IERC20(funToken).transfer(msg.sender, IERC20(funToken).balanceOf(address(this)));
         }
 
-        emit funCreated(
+        emit funCreated( //הפעלת האירוע
             msg.sender,
-            (funToken),
-            (funToken),
+            (funToken), //כתובת טוקן
+            (funToken), //כתובת חוזה טוקן
             _name,
             _symbol,
             _data,
@@ -122,11 +131,11 @@ contract FunDeployer is Ownable {
         );
     }
 
-    function getTradingFeePer() public view returns (uint256) {
+    function getTradingFeePer() public view returns (uint256) { // מחזיר את עמלת המסחר 
         return tradingFeePer;
     }
 
-    function getAffiliatePer(address _affiliateAddrs) public view returns (uint256) {
+    function getAffiliatePer(address _affiliateAddrs) public view returns (uint256) { //מחזיר: אם אתה שותף, מחזיר את ערך הטוקן. אם לא, מחזיר את שיעור העמלה הכללי
         if (affiliateSpecial[_affiliateAddrs]) {
             return affiliateSpecialPer[_affiliateAddrs];
         } else {
@@ -134,50 +143,50 @@ contract FunDeployer is Ownable {
         }
     }
 
-    function getDevFeePer() public view returns (uint256) {
+    function getDevFeePer() public view returns (uint256) { // מחזיר את האחוז שהמפתחים אמורים לקבל  
         return devFeePer;
     }
 
-    function getSpecialAffiliateValidity(address _affiliateAddrs) public view returns (bool) {
-        return affiliateSpecial[_affiliateAddrs];
+    function getSpecialAffiliateValidity(address _affiliateAddrs) public view returns (bool) {//בודק אם הכתובת קיימת במערך
+        return affiliateSpecial[_affiliateAddrs]; 
     }
 
-    function setDeploymentFee(uint256 _newdeploymentFee) public onlyOwner {
+    function setDeploymentFee(uint256 _newdeploymentFee) public onlyOwner { //פונקציה שמשנה את העמלה של השימוש בפלטפורמה- מנהל בלבד  
         require(_newdeploymentFee > 0, "invalid fee");
         deploymentFee = _newdeploymentFee;
     }
 
-    function setDevFeePer(uint256 _newOwnerFee) public onlyOwner {
+    function setDevFeePer(uint256 _newOwnerFee) public onlyOwner { //משנה את העמלה של המפתחים- מנהל בלבד
         require(_newOwnerFee > 0, "invalid fee");
         devFeePer = _newOwnerFee;
     }
 
-    function setSpecialAffiliateData(address _affiliateAddrs, bool _status, uint256 _specialPer) public onlyOwner {
+    function setSpecialAffiliateData(address _affiliateAddrs, bool _status, uint256 _specialPer) public onlyOwner { //משנה או מוסיף נתוני משתנה 
         affiliateSpecial[_affiliateAddrs] = _status;
         affiliateSpecialPer[_affiliateAddrs] = _specialPer;
     }
 
-    function setInitReserveTARA(uint256 _newVal) public onlyOwner {
+    function setInitReserveTARA(uint256 _newVal) public onlyOwner {//משנה את כמות הטוקנים 
         require(_newVal > 0, "invalid reserve");
         initialReserveTARA = _newVal;
     }
 
-    function setFunPool(address _newfunPool) public onlyOwner {
+    function setFunPool(address _newfunPool) public onlyOwner {// משנה את  הנזילות הוירטואלית שאמורה להיות במערכת 
         require(_newfunPool != address(0), "invalid pool");
         funPool = _newfunPool;
     }
 
-    function setFeeWallet(address _newFeeWallet) public onlyOwner {
+    function setFeeWallet(address _newFeeWallet) public onlyOwner { // משנה את כתובת הארנק שלשם מגיעות העמלות
         require(_newFeeWallet != address(0), "invalid wallet");
         feeWallet = _newFeeWallet;
     }
 
-    function setStorageContract(address _newStorageContract) public onlyOwner {
+    function setStorageContract(address _newStorageContract) public onlyOwner { //משנה את הכתובת של החוזה שמאחסן נתונים
         require(_newStorageContract != address(0), "invalid storage");
         funStorage = _newStorageContract;
     }
 
-    function setEventContract(address _newEventContract) public onlyOwner {
+    function setEventContract(address _newEventContract) public onlyOwner { //funEvent משנה את כתובת החוזה 
         require(_newEventContract != address(0), "invalid event");
         eventTracker = _newEventContract;
     }
@@ -192,12 +201,12 @@ contract FunDeployer is Ownable {
         antiSnipePer = _newAntiSnipePer;
     }
 
-    function setAffiliatePer(uint256 _newAffPer) public onlyOwner {
+    function setAffiliatePer(uint256 _newAffPer) public onlyOwner {//משנה עמלת שותפים
         require(_newAffPer > 0, "invalid affiliate");
         affiliatePer = _newAffPer;
     }
 
-    function emitRoyal(
+    function emitRoyal( //royal פונקציה שמפעילה את האירוע 
         address tokenAddress,
         uint256 liquidityAmount,
         uint256 tokenAmount,

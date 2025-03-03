@@ -5,7 +5,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IFunStorageInterface} from "./interfaces/IFunStorageInterface.sol";
 
 contract FunEventTracker is Ownable {
-
+//חוזה לניהול ומעקב אחרי אירועים שקשורים למערכת של יצירת טוקנים, קנייה, מכירה ורישום נזילות
+//הוא שומר ומנהל נתונים על עסקאות, יוצרים וחוזים שונים בפלטפורמה
     address public funRegistry;
 
     uint256 public buyEventCount;

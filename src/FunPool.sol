@@ -23,20 +23,23 @@ import {IUniswapV3Pool} from "@v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {console} from "forge-std/console.sol";
 
 contract FunPool is Ownable, ReentrancyGuard {
-    using FixedPointMathLib for uint256;
+    //ERC20 חוזה לניהול בריכות מסחר לטוקנים המבוססים על  
+      // Uniswap V3  עם אינטגרציה ל
+ 
+    using FixedPointMathLib for uint256; // לחישוב פעולות מתמטיות
 
-    struct FunTokenPoolData {
-        uint256 reserveTokens;
-        uint256 reserveTARA;
-        uint256 volume;
-        uint256 listThreshold;
-        uint256 initialReserveTARA;
-        uint256 maxBuyPerWallet;
-        bool tradeActive;
-        bool royalemitted;
+    struct FunTokenPoolData { //data
+        uint256 reserveTokens; //כמות הטוקנים שבבריכה
+        uint256 reserveTARA; //ERC20 טוקן מסוג 
+        uint256 volume; //  נפח המסחר שנעשה  
+        uint256 listThreshold; // הסף המינימלי שצריך לשים בבריכה כדי להיכלל ברשימה
+        uint256 initialReserveTARA; // כמות התחלתית שיש בבריכה
+        uint256 maxBuyPerWallet; // כמות הטוקנים המקסימלית שארנק יכול לקנות
+        bool tradeActive; //בודק אם המסחר אפשרי
+        bool royalemitted; //בודק אם אפשר לשחרר תגמול תגמולים 
     }
 
-    struct FunTokenPool {
+    struct FunTokenPool { //הפרטים על הטוקן
         address creator;
         address token;
         address baseToken;
@@ -64,26 +67,30 @@ contract FunPool is Ownable, ReentrancyGuard {
  
 
     // deployer allowed to create fun tokens
+    //משתמשים מורשים להפעלת הבריכה 
     mapping(address => bool) public allowedDeployers;
     // user => array of fun tokens
+    //שומר עבור כל משתמש את רשימת הטוקנים שלו
     mapping(address => address[]) public userFunTokens;
     // fun token => fun token details
+    // עבור כל טוקן, שומר את פרטיו
     mapping(address => FunTokenPool) public tokenPools;
     /// represents the tick spacing for each fee tier
+    //אין שימוש בחוזה
     mapping(uint24 => int256) public tickSpacing;
-
+ // אירוע של הוספת נזילות
     event LiquidityAdded(address indexed provider, uint256 tokenAmount, uint256 taraAmount);
-
+// אירוע של הוספת טוקן
     event listed(
         address indexed tokenAddress,
         address indexed router,
-        address indexed pair,
+        address indexed pair, //הצמדה
         uint256 liquidityAmount,
         uint256 tokenAmount,
         uint256 time,
         uint256 totalVolume
     );
-
+//אירוע של מכירת וקנית  טוקנים
     event tradeCall(
         address indexed caller,
         address indexed funContract,
@@ -105,8 +112,8 @@ contract FunPool is Ownable, ReentrancyGuard {
         feeContract    = _feeContract;
         eventTracker   = _eventTracker;
     }
-
-    function initFun(
+//הפונקציה  אחראית על יצירת טוקן חדש והגדרת בריכת המסחר הראשונית עבורו
+    function initFun( 
         string[2] memory _name_symbol,
         uint256 _totalSupply,
         address _creator,
@@ -123,7 +130,7 @@ contract FunPool is Ownable, ReentrancyGuard {
 
         // create the pool data
         FunTokenPool memory pool;
-
+        // מכניס את כל הנתונים והפרטים
         pool.creator = _creator;
         pool.token = funToken;
         pool.baseToken = wtara;
@@ -145,7 +152,12 @@ contract FunPool is Ownable, ReentrancyGuard {
         return address(funToken); 
     }
 
+    //TARA מחזיר לו את החשבון כמה טוקנים הוא אמור לקבל בעד ה  
     // Calculate amount of output tokens based on input TARA
+    //num- 10tara * 50token =500
+    //den- 20tara + 10tara=30
+    // 500/30 = 16.3
+    //יקבל 16.3
     function getAmountOutTokens(address _funToken, uint256 _amountIn) public view returns (uint256 amountOut) {
         require(_amountIn > 0, "Invalid input amount");
         FunTokenPool storage token = tokenPools[_funToken];
@@ -155,7 +167,7 @@ contract FunPool is Ownable, ReentrancyGuard {
         uint256 denominator = (token.pool.reserveTARA) + _amountIn;
         amountOut = numerator / denominator;
     }
-
+// מחזיר לו את החשבון כמה טרה הוא אמור לקבל בעד הטוקנים  
     // Calculate amount of output TARA based on input tokens
     function getAmountOutTARA(address _funToken, uint256 _amountIn) public view returns (uint256 amountOut) {
         require(_amountIn > 0, "Invalid input amount");
@@ -167,12 +179,13 @@ contract FunPool is Ownable, ReentrancyGuard {
         amountOut = numerator / denominator;
     }
 
+//base token מקבל כתובת ומחזיר עבור כתובת הטוקן את 
     function getBaseToken(address _funToken) public view returns (address) {
         FunTokenPool storage token = tokenPools[_funToken];
         return address(token.baseToken);
     }
 
-
+    //TARAמחשב את  שווי השוק של הטוקן ביחס ל 
     function getCurrentCap(address _funToken) public view returns (uint256) {
         FunTokenPool storage token = tokenPools[_funToken];
 
@@ -184,51 +197,67 @@ contract FunPool is Ownable, ReentrancyGuard {
         return (amountMinToken * IERC20(_funToken).totalSupply()) / token.pool.reserveTokens;
     }
 
+//מקבל כתובת ומחזיר את הפרטים של הטוקן
     function getFuntokenPool(address _funToken) public view returns (FunTokenPool memory) {
         return tokenPools[_funToken];
     }
 
+//הפונקציה מחזירה מערך של פרטי טוקנים עבור רשימת טוקנים נתונה.
     function getFuntokenPools(address[] memory _funTokens) public view returns (FunTokenPool[] memory) {
         uint256 length = _funTokens.length;
         FunTokenPool[] memory pools = new FunTokenPool[](length);
         for (uint256 i = 0; i < length;) {
             pools[i] = tokenPools[_funTokens[i]];
-            unchecked {
+            unchecked { //overflow בודק 
                 i++;
             }
         }
         return pools;
     }
 
+// מקבל כתובת משתמש ומחזיר מערך של כל הטוקנים שלו
     function getUserFuntokens(address _user) public view returns (address[] memory) {
         return userFunTokens[_user];
     }
 
+// הפונקציה  בודקת אם המשתמש יכול לקנות כמות מסוימת של טוקנים מבלי לעבור את המגבלה המוגדרת עבור טוקן מסוים 
     function checkMaxBuyPerWallet(address _funToken, uint256 _amount) public view returns (bool) {
         FunTokenPool memory token = tokenPools[_funToken];
         uint256 userBalance = IERC20(_funToken).balanceOf(msg.sender);
         return userBalance + _amount <= token.pool.maxBuyPerWallet;
     }
 
+//הפונקציה  מאפשרת למשתמש למכור טוקנים ולהמיר אותם לכסף 
+// תוך שמירה על מגבלות שונות. הפונקציה גם מטפלת בעמלות שותפים
+// עמלות פיתוח ועמלות אחרות 
     function sellTokens(address _funToken, uint256 _tokenAmount, uint256 _minEth, address _affiliate)
         public
-        nonReentrant
+        nonReentrant // שלא יקרה יותר מפעם אחת
     {
         FunTokenPool storage token = tokenPools[_funToken];
         require(token.pool.tradeActive, "Trading not active");
 
         uint256 tokenToSell = _tokenAmount;
+        //מחשב כמה טרה מקבלים על הטוקנים שרוצים למכור
         uint256 taraAmount = getAmountOutTARA(_funToken, tokenToSell);
+        //חישוב העמלה הכללית של העסקה
         uint256 taraAmountFee = (taraAmount * IFunDeployer(token.deployer).getTradingFeePer()) / BASIS_POINTS;
+       //חישוב העמלה שתינתן למפתחי המערכת
         uint256 taraAmountOwnerFee = (taraAmountFee * IFunDeployer(token.deployer).getDevFeePer()) / BASIS_POINTS;
+       //ישוב העמלה שתינתן לשותף
         uint256 affiliateFee =
             (taraAmountFee * (IFunDeployer(token.deployer).getAffiliatePer(_affiliate))) / BASIS_POINTS;
+        // בודקת שהכמות המתקבלת  לא אפס ושהיא לא פחותה מהכמות המינימלית שהוגדרה על ידי המשתמש 
+        // אם תנאי זה לא מתקיים, הפונקציה תפסול את העסקה
         require(taraAmount > 0 && taraAmount >= _minEth, "Slippage too high");
-
+//משנה את הנתונים; מעלה את הטוקנים ןמוריד את הטרה
         token.pool.reserveTokens += _tokenAmount;
         token.pool.reserveTARA -= taraAmount;
         token.pool.volume += taraAmount;
-
+// :העברות כספים
+//לכתובת העמלות לשותף אם יש כזה.למפתחי המערכת.לשולח עצמו (המשתמש שמוכר את הטוקנים).
+//כל העברה מתבצעת באמצעות קריאה לפונקציה  עם הערך  המתאים.
+//require כל קריאה חייבת להצליח או שהיא תפסול את העסקה בדיקה באמצעות  .
         IERC20(_funToken).transferFrom(msg.sender, address(this), tokenToSell);
         (bool success,) = feeContract.call{value: taraAmountFee - taraAmountOwnerFee - affiliateFee}("");
         require(success, "fee TARA transfer failed");
@@ -242,6 +271,7 @@ contract FunPool is Ownable, ReentrancyGuard {
         (success,) = msg.sender.call{value: taraAmount - taraAmountFee}("");
         require(success, "seller TARA transfer failed");
 
+//trade call קורא לאירוע של מכירה טוקנים
         emit tradeCall(
             msg.sender,
             _funToken,
@@ -252,10 +282,13 @@ contract FunPool is Ownable, ReentrancyGuard {
             block.timestamp,
             "sell"
         );
-
+//Event tracker מעביר את המידע לחוזה 
         IFunEventTracker(eventTracker).sellEvent(msg.sender, _funToken, tokenToSell, taraAmount);
     }
 
+//הפונקציה  מאפשרת למשתמש לקנות טוקנים   
+// תוך שמירה על מגבלות שונות. הפונקציה גם מטפלת בעמלות שותפים
+// עמלות פיתוח ועמלות אחרות 
     function buyTokens(address _funToken, uint256 _minTokens, address _affiliate) public payable nonReentrant {
         require(msg.value > 0, "Invalid buy value");
         FunTokenPool storage token = tokenPools[_funToken];
@@ -303,11 +336,14 @@ contract FunPool is Ownable, ReentrancyGuard {
             tokenAmount
         );
 
+//לאחר שהשווי שוק של הטוקן עבר סף מסוים,
+//מתבצע תהליך של הוספת נזילות ל- דקס ורישום הטוקן בבורסה
         uint256 currentMarketCap = getCurrentCap(_funToken);
 
         uint256 listThresholdCap = token.pool.listThreshold * (10 ** IERC20Metadata(stable).decimals());
 
         /// royal emit when marketcap is half of listThresholdCap
+        //אם שווי השוק הגיע לחצי, מפעיל את האירוע רויאל
         if (currentMarketCap >= (listThresholdCap / 2) && !token.pool.royalemitted) {
             IFunDeployer(token.deployer).emitRoyal(
                 _funToken, token.pool.reserveTARA, token.pool.reserveTokens, block.timestamp, token.pool.volume
@@ -315,6 +351,7 @@ contract FunPool is Ownable, ReentrancyGuard {
             token.pool.royalemitted = true;
         }
         // using marketcap value of token to check when to add liquidity to DEX
+        //Threshold הוספת נזילות לבורסה כאשר המרקט קאפ חצה את ה 
         if (currentMarketCap >= listThresholdCap) {
             token.pool.tradeActive = false;
             IFunToken(_funToken).initiateDex();
@@ -325,6 +362,7 @@ contract FunPool is Ownable, ReentrancyGuard {
             uint256 reserveTARA = token.pool.reserveTARA;
             token.pool.reserveTARA = 0;
 
+//מופעל כדי לרשום את הטוקן בבורסה, עם כל הנתונים הרלוונטיים (הכמות שנותרה של טוקנים וכו)
             emit listed(
                 token.token,
                 token.router,
@@ -336,7 +374,7 @@ contract FunPool is Ownable, ReentrancyGuard {
             );
         }
     }
-
+//אחראית להוספת נזילות  לפול של יונסאפ בין שני טוקנים
     function _addLiquidityV3(address _funToken, uint256 _amountTokenDesired, uint256 _nativeForDex) internal {
         FunTokenPool storage token = tokenPools[_funToken];
 

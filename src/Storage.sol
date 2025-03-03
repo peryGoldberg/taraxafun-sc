@@ -4,9 +4,11 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract FunStorage is Ownable {
+// משמש כמסד נתונים לחוזים החכמים
 
-    struct FunDetails {
-        address funAddress;
+
+    struct FunDetails { //מאחסן נתונים על הטוקנים שנוצרו
+        address funAddress; 
         address tokenAddress;
         address funOwner;
         string name;
@@ -17,11 +19,11 @@ contract FunStorage is Ownable {
         uint256 createdOn;
     }
 
-    FunDetails[] public funContracts;
+    FunDetails[] public funContracts; //funDetails מערך מסוג אוביקט  
     
     uint256 public funCount;
 
-    mapping(address => bool) public deployer;
+    mapping(address => bool) public deployer; 
     mapping(address => uint256) public funContractToIndex;
     mapping(address => uint256) public tokenContractToIndex;
     mapping(address => uint256) public ownerToFunCount;
@@ -31,7 +33,7 @@ contract FunStorage is Ownable {
 
     constructor() Ownable(msg.sender) {}
 
-    function addFunContract(
+    function addFunContract( //מקבלת נתונים של חוזה של טוקן ובודקת תקינות ומעדכנת ושומרת
         address _funOwner,
         address _funAddress,
         address _tokenAddress,
@@ -66,39 +68,39 @@ contract FunStorage is Ownable {
         funCount++;
     }
 
-    function getFunContract(
+    function getFunContract( //מקבל אינדקס ומחזיר את הכתובת של החוזה
         uint256 index
     ) public view returns (FunDetails memory) {
         return funContracts[index];
     }
 
-    function getFunContractIndex(
+    function getFunContractIndex(//מקבל כתובת ומחזיר את האינדקס
         address _funContract
     ) public view returns (uint256) {
         return funContractToIndex[_funContract];
     }
 
-    function getTotalContracts() public view returns (uint) {
+    function getTotalContracts() public view returns (uint) { // מחזיר את כמות הטוקנים שהופנקו דרך המערכת
         return funContracts.length;
     }
 
-    function getFunContractOwner(
+    function getFunContractOwner(// מקבל כתובת טוקן ומחזיר את הבעלים שלה
         address _funContract
     ) public view returns (address) {
         return funContractToOwner[_funContract];
     }
 
-    function addDeployer(address _deployer) public onlyOwner {
+    function addDeployer(address _deployer) public onlyOwner {// מקבל כתובת ומוסיף שותף שיכול לפרוס את החוזה 
         require(!deployer[_deployer], "already added");
         deployer[_deployer] = true;
     }
 
-    function removeDeployer(address _deployer) public onlyOwner {
+    function removeDeployer(address _deployer) public onlyOwner { //מוחק כתובת 
         require(deployer[_deployer], "not deployer");
         deployer[_deployer] = false;
     }
 
-    function emergencyWithdraw() public onlyOwner {
+    function emergencyWithdraw() public onlyOwner {//  מאפשר לבעל החוזה למשוך את יתרת החוזה במקרה חרום 
         uint256 balance = address(this).balance;
         payable(owner()).transfer(balance);
     }
