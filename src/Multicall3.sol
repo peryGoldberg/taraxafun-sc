@@ -11,6 +11,8 @@ pragma solidity ^0.8.24;
 /// @author Andreas Bigger <andreas@nascent.xyz>
 /// @author Matt Solomon <matt@mattsolomon.dev>
 contract Multicall3 {
+    //חוזה חזק ושימושי המאפשר ביצוע קריאות מרובות לחוזים חכמים בטרנזקציה אחת
+    // הוא מספק מספר גרסאות לביצוע קריאות, עם או בלי דרישה להצלחה, ואף מאפשר קריאות עם ערך
     struct Call {
         address target;
         bytes callData;
@@ -57,6 +59,8 @@ contract Multicall3 {
     /// @param requireSuccess If true, require all calls to succeed
     /// @param calls An array of Call structs
     /// @return returnData An array of Result structs
+    //הפונקציה  מאפשרת לבצע מספר קריאות לחוזים שונים בתוך טרנזקציה אחת, 
+    //אך בשונה מהפונקציה הקודמת, כאן אפשר לבחור אם העסקה כולה תיכשל במקרה של קריאה שנכשלה או לא
     function tryAggregate(bool requireSuccess, Call[] calldata calls) public payable returns (Result[] memory returnData) {
         uint256 length = calls.length;
         returnData = new Result[](length);
@@ -76,6 +80,7 @@ contract Multicall3 {
     /// @return blockNumber The block number where the calls were executed
     /// @return blockHash The hash of the block where the calls were executed
     /// @return returnData An array of Result structs
+    //משלבת קריאות מרובות (של הפונקציה הקודמת) יחד עם מידע על הבלוק שבו הקריאות בוצעו
     function tryBlockAndAggregate(bool requireSuccess, Call[] calldata calls) public payable returns (uint256 blockNumber, bytes32 blockHash, Result[] memory returnData) {
         blockNumber = block.number;
         blockHash = blockhash(block.number);
@@ -88,6 +93,7 @@ contract Multicall3 {
     /// @return blockNumber The block number where the calls were executed
     /// @return blockHash The hash of the block where the calls were executed
     /// @return returnData An array of Result structs
+    //tryBlockAndAggregate קוראת לפונקציה 
     function blockAndAggregate(Call[] calldata calls) public payable returns (uint256 blockNumber, bytes32 blockHash, Result[] memory returnData) {
         (blockNumber, blockHash, returnData) = tryBlockAndAggregate(true, calls);
     }
@@ -95,6 +101,9 @@ contract Multicall3 {
     /// @notice Aggregate calls, ensuring each returns success if required
     /// @param calls An array of Call3 structs
     /// @return returnData An array of Result structs
+    //הפונקציה מקבלת מערך של קריאות חוזה ומבצעת את כל הקריאות הללו.
+//אם לא כל הקריאות הצליחו (ובהנחה ש-המשתנה שמרשה להיכשל (אלואס פליור) לא מוגדר כ-אמת עבור קריאה כלשהי), הפונקציה מבצעת חזרה(רברט) עם הודעת שגיאה.
+//הפונקציה מחזירה מערך של תוצאות לכל קריאה: האם הצליחה ואם לא, מה היו נתוני החזרה שלה.
     function aggregate3(Call3[] calldata calls) public payable returns (Result[] memory returnData) {
         uint256 length = calls.length;
         returnData = new Result[](length);
@@ -126,6 +135,10 @@ contract Multicall3 {
     /// @notice Reverts if msg.value is less than the sum of the call values
     /// @param calls An array of Call3Value structs
     /// @return returnData An array of Result structs
+    // מתבצעת על חוזה חכם וכוללת קריאות מרובות לחוזים שונים
+    // עם אפשרות להעביר ערך איטריום בכל קריאה בנפרד
+    //הפונקציה מבצע את הקריאות, מחזירה את תוצאות הקריאות ומוודאת שהסכום הכולל 
+    //של איטריום שנשלח לתוך הפונקציה תואם לסכום שנשלח בכל קריאה בנפרד
     function aggregate3Value(Call3Value[] calldata calls) public payable returns (Result[] memory returnData) {
         uint256 valAccumulator;
         uint256 length = calls.length;
@@ -192,11 +205,14 @@ contract Multicall3 {
     }
 
     /// @notice Returns the (ETH) balance of a given address
+    //מחזירה את יתרת ה-ETH בכתובת ספציפית.
+
     function getEthBalance(address addr) public view returns (uint256 balance) {
         balance = addr.balance;
     }
 
     /// @notice Returns the block hash of the last block
+    //מחזירה את הכתובת של הכוין ביס (הכורה של הבלוק הנוכחי), כלומר הכתובת שקיבלה את הבלוק כתגמול על כרייתו.
     function getLastBlockHash() public view returns (bytes32 blockHash) {
         unchecked {
             blockHash = blockhash(block.number - 1);
@@ -208,7 +224,7 @@ contract Multicall3 {
     function getBasefee() public view returns (uint256 basefee) {
         basefee = block.basefee;
     }
-
+//מחזירה את בלוק האש של בלוק מסוים על פי מספר הבלוק שניתן כקלט.
     /// @notice Returns the chain id
     function getChainId() public view returns (uint256 chainid) {
         chainid = block.chainid;

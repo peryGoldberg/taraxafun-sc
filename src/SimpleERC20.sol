@@ -154,6 +154,7 @@ contract SimpleERC20 is IERC20 {
      * @param spender The address which will spend the funds.
      * @param addedValue The amount of tokens to increase the allowance by.
      */
+     //מאפשרת לבעל הטוקן להגדיל את ההרשאה של כתובת מסוימת להוציא טוקנים בשמו
     function increaseAllowance(
         address spender,
         uint256 addedValue
@@ -192,6 +193,7 @@ contract SimpleERC20 is IERC20 {
      * @param account The account whose tokens will be burnt.
      * @param amount The amount that will be burnt.
      */
+     //זוהי פונקציה פנימית שמאפשרת שריפת כמות מסוימת של טוקנים מכתובת ספציפית
     function _burn(address account, uint256 amount) internal {
         require(account != address(0));
         require(amount <= _balances[account]);
@@ -200,7 +202,8 @@ contract SimpleERC20 is IERC20 {
         _balances[account] = _balances[account] - amount;
         emit Transfer(account, address(0), amount);
     }
-
+    
+//initialFrom בודקת שהפונקציה מופעלת רק על ידי
     function initiateDex() public {
         require(msg.sender == initialFrom, "only fun allowed");
         dexInitiated = true;

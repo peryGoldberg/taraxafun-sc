@@ -56,7 +56,7 @@ contract FunPool is Ownable, ReentrancyGuard {
     address public wtara           = 0x5d0Fa4C5668E5809c83c95A7CeF3a9dd7C68d4fE;
     address public stable          = 0x69D411CbF6dBaD54Bfe36f81d0a39922625bC78c;
     address public factory         = 0x5EFAc029721023DD6859AFc8300d536a2d6d4c82;
-    address public router          = 0x705d6bcc8aF1732C9Cb480347aF8F62Cbfa3C671; 
+    address public router          = 0x705d6bcc8aF1732C9Cb480347aF8F62Cbfa3C671; //uniswap
     address public positionManager = 0x1C5A295E9860d127D8A3E7af138Bb945c4377ae7;
     address public oracle          = 0xe03e2C41c8c044192b3CE2d7AFe49370551c7f80;
 
@@ -374,10 +374,12 @@ contract FunPool is Ownable, ReentrancyGuard {
             );
         }
     }
-//אחראית להוספת נזילות  לפול של יונסאפ בין שני טוקנים
+   // מבצעת הוספת נזילות (liquidity) לפלטפורמת Uniswap V3 עבור טוקן מסוג _funToken ו-WETH
     function _addLiquidityV3(address _funToken, uint256 _amountTokenDesired, uint256 _nativeForDex) internal {
         FunTokenPool storage token = tokenPools[_funToken];
 
+        // נקבע אילו שני טוקנים ייכנסו לבריכת הנזילות
+        //כתובות מהקטן לגדול - בדיקה של גודל כתובות החוזים כדי להתאים לתקן של יוניסוואפ
         address token0 = _funToken < wtara ? _funToken : wtara;
         address token1 = _funToken < wtara ? wtara : _funToken;
 
@@ -398,6 +400,7 @@ contract FunPool is Ownable, ReentrancyGuard {
         console.log("price_numerator: %s", price_numerator);
         console.log("price_denominator: %s", price_denominator);
 
+    // יצירת ואיתחול בריכת נזילות אם לא קיימת
         if (token.storedLPAddress == address(0)) {
             INonfungiblePositionManager(positionManager).createAndInitializePoolIfNecessary(
                 token0, token1, uniswapPoolFee, encodePriceSqrtX96(price_numerator, price_denominator)
@@ -406,20 +409,27 @@ contract FunPool is Ownable, ReentrancyGuard {
             require(token.storedLPAddress != address(0), "Pool creation failed");
         }
 
+        // אישור המטבעות
         IWETH(wtara).deposit{value: _nativeForDex}();
 
         IERC20(wtara).approve(positionManager, _nativeForDex);
         IERC20(_funToken).approve(positionManager, _amountTokenDesired);
 
+        // תחום זה קובע את המחיר שיחול על המיקום המינתי בבריכה ב-Uniswap V3.
+        // קובע את טווח הנזילות המקסימלי ביוניסוואפ
         int24 tickLower = -887200;
         int24 tickUpper = 887200;
 
+        // כמות הטוקנים שצריך להפקיד בכל צד של הבריכה, תלוי באיזה טוקן הוא token0 ו-token1.
         uint256 amount0Desired = (token0 == _funToken ? _amountTokenDesired : _nativeForDex);
         uint256 amount1Desired = (token0 == _funToken ? _nativeForDex : _amountTokenDesired);
 
+        // הגדרת מינימום שמותר להפקיד בכל צד של הבריכה. במקרה זה, 98% מהסכום שצוין יתקבל.
+        // המשתמש לא יפסיד יותר מ2 אחוז מהערך הצפוי - אם תוך כדי העיסקה הערך ירד ביותר משתי אחוז העיסקה לא תתבצע
         uint256 amount0Min = (amount0Desired * 98) / 100;
         uint256 amount1Min = (amount1Desired * 98) / 100;
 
+        // מוגדרים כל הפרמטרים שדורשים יצירה של מיקום בבריכה ב-Uniswap, כולל כמות הטוקנים, fees, ה-ticks, ועוד.
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: token0,
             token1: token1,
@@ -434,18 +444,21 @@ contract FunPool is Ownable, ReentrancyGuard {
             deadline: block.timestamp + 1
         });
 
+    // המערכת מבצעת את פעולת ה-Mint, כלומר יוצרת את ה-NFT שמייצג את המיקום בבריכהד
         (uint256 tokenId,,,) = INonfungiblePositionManager(positionManager).mint(params);
-
+    // אישור ה-NFT
         IERC721(positionManager).approve(LPManager, tokenId);
-
+    // הפקדה של ה-NFT שנוצר עבור המיקום בבריכה אל LPManager.
         IFunLPManager(LPManager).depositNFTPosition(tokenId, msg.sender);
     }
 
+    // המטרה היא לחשב ולהחזיר את שורש המחיר ברמה של דיוק גבוהה
+    // חישוב של שורש ריבועי של המחיר
     function encodePriceSqrtX96(uint256 price_numerator, uint256 price_denominator) internal pure returns (uint160) {
         require(price_denominator > 0, "Invalid price denominator");
-
+    // חילוק מונה במכנה
         uint256 sqrtPrice = sqrt(price_numerator.divWadDown(price_denominator));
-
+    //הדפסת התוצאה
         console.log("sqrtPrice: %s", sqrtPrice);
         
         // Q64.96 fixed-point number divided by 1e9 for underflow prevention
@@ -453,6 +466,8 @@ contract FunPool is Ownable, ReentrancyGuard {
     }
 
 
+    // חישוב שורש ריבועי של מספר
+    // פונקציה עזר לחישוב השורש הריבועי של מספר y
     // Helper function to calculate square root
     function sqrt(uint y) internal pure returns (uint z) {
         if (y > 3) {
@@ -466,35 +481,39 @@ contract FunPool is Ownable, ReentrancyGuard {
             z = 1;
         }
     }
-
+     // פונקציה זו מוסיפה כתובת (_deployer) לרשימה של "deployer" שמורשים לפעול על החוזה. 
     function addDeployer(address _deployer) public onlyOwner {
         allowedDeployers[_deployer] = true;
     }
 
+    // פונקציה זו מסירה כתובת (_deployer) מהרשימה של "deployer" המורשים.
     function removeDeployer(address _deployer) public onlyOwner {
         allowedDeployers[_deployer] = false;
     }
 
+    // קובעת את כתובת החוזה של היישום החדש
     function setImplementation(address _implementation) public onlyOwner {
         require(_implementation != address(0), "Invalid implementation");
         implementation = _implementation;
     }
-
+     // קובעת את כתובת החוזה של חוזה העמלות
     function setFeeContract(address _newFeeContract) public onlyOwner {
         require(_newFeeContract != address(0), "Invalid fee contract");
         feeContract = _newFeeContract;
     }
-
+     // קובעת את כתובת מנהל ה LP
     function setLPManager(address _newLPManager) public onlyOwner {
         require(_newLPManager != address(0), "Invalid LP lock deployer");
         LPManager = _newLPManager;
     }
 
+    // קובעת את כתובת המעקב אחרי אירועים
     function setEventTracker(address _newEventTracker) public onlyOwner {
         require(_newEventTracker != address(0), "Invalid event tracker");
         eventTracker = _newEventTracker;
     }
 
+    // קובעת את כתובת המטבע היציב
     function setStableAddress(address _newStableAddress) public onlyOwner {
         require(_newStableAddress != address(0), "Invalid stable address");
         stable = _newStableAddress;
@@ -520,20 +539,26 @@ contract FunPool is Ownable, ReentrancyGuard {
         positionManager = _newPositionManager;
     }
 
+    // קובעת את כתובת מנהל המיקומים 
     function setUniswapPoolFee(uint24 _newuniswapPoolFee) public onlyOwner {
         require(_newuniswapPoolFee > 0, "Invalid pool fee");
         uniswapPoolFee = _newuniswapPoolFee;
     }
 
+    // מאפשרת לבעלים של החוזה למשוך טוקנים (ERC-20) מתוך החוזה במקרה חירום. 
+    // זה לא משיחת שטיח?
     function emergencyWithdrawToken(address _token, uint256 _amount) public onlyOwner {
         IERC20(_token).transfer(owner(), _amount);
     }
 
+    // מאפשרת לבעלים של החוזה למשוך Ether או TARA  מתוך החוזה במקרה חירום.
+    // הפונקציה משתמשת בפקודת call .
+    //כדי לשלוח את האיטריום לבעלים של החוזה ותוך כדי מבצעת בדיקת הצלחה על מנת לוודא שההעברה בוצעה כראוי.
     function emergencyWithdrawTARA(uint256 _amount) public onlyOwner {
         (bool success,) = payable(owner()).call{value: _amount}("");
         require(success, "TARA transfer failed");
     }
 
+    // מאפשרת לקבל איטריום 
     receive() external payable { }
-
 }
