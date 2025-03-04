@@ -8,10 +8,11 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {INonfungiblePositionManager} from "@v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import {IFunStorageInterface} from "./interfaces/IFunStorageInterface.sol";
 
-// החוזה מאפשר לנהל את הפוזיציות של ה-LP, לאסוף עמלות (fees) מהן ולחלק את העמלות בין המפתחים ובעל החוזה, תוך שמירה על ניהול מותאם לפוזיציות מסוג ERC721 (NFTs). 
-//בנוסף, החוזה מספק את האפשרות לשנות את שיעור העמלה וכולל גם אפשרות למשיכה חירומית של NFTs.
-contract FunLPManager is Ownable, IERC721Receiver {
 
+contract FunLPManager is Ownable, IERC721Receiver {
+//מיועד לנהל עמדות נזילות  בפלטפורמת יונסאפ עבור מפתחים  
+//החוזה מאפשר להפקיד עמדות נזילות לאסוף עמלות ולמשוך אותן, 
+//תוך שמירה על עמלת ניהול לבעל החוזה
     struct LPPosition {
         address dev;
         uint256 token0Collected;
