@@ -16,9 +16,6 @@ import {IWETH} from "./interfaces/IWETH.sol";
 import {IFunToken} from "./interfaces/IFunToken.sol";
 import {IChainlinkAggregator} from "./interfaces/IChainlinkAggregator.sol";
 
-// import {INonfungiblePositionManager} from "@v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
-// import {IUniswapV3Factory} from "@v3-core/contracts/interfaces/IUniswapV3Factory.sol";
-// import {IUniswapV3Pool} from "@v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 import {IRouter} from "@velodrome/interfaces/IRouter.sol";
 import {IPoolFactory} from "@velodrome/interfaces/factories/IPoolFactory.sol";
@@ -53,7 +50,7 @@ contract FunPool is Ownable, ReentrancyGuard {
     }
 
     uint256 public constant BASIS_POINTS = 10000;
-    uint24  public uniswapPoolFee = 10000;
+    // uint24  public uniswapPoolFee = 10000;
 
     address public wtara           = 0x5d0Fa4C5668E5809c83c95A7CeF3a9dd7C68d4fE;
     address public stable          = 0x69D411CbF6dBaD54Bfe36f81d0a39922625bC78c;
@@ -66,7 +63,7 @@ contract FunPool is Ownable, ReentrancyGuard {
     address public feeContract;
     address public LPManager;
     address public eventTracker;
- 
+    bool public stable1=true; 
 
     // deployer allowed to create fun tokens
     //משתמשים מורשים להפעלת הבריכה 
@@ -380,7 +377,6 @@ contract FunPool is Ownable, ReentrancyGuard {
         
        address tokenA = _funToken;
         address tokenB = wtara;
-
          uint256 amountADesired = (tokenA == _funToken ? _amountTokenDesired : _nativeForDex);
          uint256 amountBDesired = (tokenA == _funToken ? _nativeForDex : _amountTokenDesired);
         //כמה יחס צריך לקחת???
@@ -391,10 +387,10 @@ contract FunPool is Ownable, ReentrancyGuard {
         IERC20(wtara).approve(positionManager, _nativeForDex);
         IERC20(_funToken).approve(positionManager, _amountTokenDesired);
 
-               
-        IRouter(positionManager).addLiquidity(tokenA,tokenB,true,amountADesired,amountBDesired,
+        //מה זה הtrue  
+        IRouter(positionManager).addLiquidity(tokenA,tokenB,stable1,amountADesired,amountBDesired,
         amountAMin,amountBMin,address(this),block.timestamp + 1);
-    
+     // לבדוק את הדד ליין
     }
 
     // המטרה היא לחשב ולהחזיר את שורש המחיר ברמה של דיוק גבוהה
