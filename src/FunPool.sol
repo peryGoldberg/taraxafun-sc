@@ -15,8 +15,6 @@ import {IFunLPManager} from "./interfaces/IFunLPManager.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 import {IFunToken} from "./interfaces/IFunToken.sol";
 import {IChainlinkAggregator} from "./interfaces/IChainlinkAggregator.sol";
-
-
 import {IRouter} from "@velodrome/interfaces/IRouter.sol";
 import {IPoolFactory} from "@velodrome/interfaces/factories/IPoolFactory.sol";
 import {console} from "forge-std/console.sol";
@@ -63,7 +61,7 @@ contract FunPool is Ownable, ReentrancyGuard {
     address public feeContract;
     address public LPManager;
     address public eventTracker;
-    bool public stable1=true; 
+    bool public isStable=true; 
 
     // deployer allowed to create fun tokens
     //משתמשים מורשים להפעלת הבריכה 
@@ -388,7 +386,7 @@ contract FunPool is Ownable, ReentrancyGuard {
         IERC20(_funToken).approve(positionManager, _amountTokenDesired);
 
         //מה זה הtrue  
-        IRouter(positionManager).addLiquidity(tokenA,tokenB,stable1,amountADesired,amountBDesired,
+        IRouter(positionManager).addLiquidity(tokenA,tokenB,isStable,amountADesired,amountBDesired,
         amountAMin,amountBMin,address(this),block.timestamp + 1);
      // לבדוק את הדד ליין
     }
@@ -482,10 +480,10 @@ contract FunPool is Ownable, ReentrancyGuard {
 
 //לשנות!!!
     // קובעת את כתובת מנהל המיקומים 
-    function setUniswapPoolFee(uint24 _newuniswapPoolFee) public onlyOwner {
-        require(_newuniswapPoolFee > 0, "Invalid pool fee");
-        uniswapPoolFee = _newuniswapPoolFee;
-    }
+    // function setUniswapPoolFee(uint24 _newuniswapPoolFee) public onlyOwner {
+    //     require(_newuniswapPoolFee > 0, "Invalid pool fee");
+    //     uniswapPoolFee = _newuniswapPoolFee;
+    // }
 
     // מאפשרת לבעלים של החוזה למשוך טוקנים (ERC-20) מתוך החוזה במקרה חירום. 
     // זה לא משיחת שטיח?

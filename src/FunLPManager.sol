@@ -5,9 +5,10 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {INonfungiblePositionManager} from "@v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
-import {IFunStorageInterface} from "./interfaces/IFunStorageInterface.sol";
+import {IPool} from "@velodrome/interfaces/IPool.sol";
 
+
+import {IFunStorageInterface} from "./interfaces/IFunStorageInterface.sol";
 
 contract FunLPManager is Ownable, IERC721Receiver {
 //מיועד לנהל עמדות נזילות  בפלטפורמת יונסאפ עבור מפתחים  
@@ -15,8 +16,8 @@ contract FunLPManager is Ownable, IERC721Receiver {
 //תוך שמירה על עמלת ניהול לבעל החוזה
     struct LPPosition {
         address dev;
-        uint256 token0Collected;
-        uint256 token1Collected;
+        uint256 tokenACollected;
+        uint256 tokenBCollected;
     }
 
     uint256 public constant BASIS_POINTS = 10000;
@@ -60,8 +61,8 @@ contract FunLPManager is Ownable, IERC721Receiver {
 
         LPPosition memory lpPosition = LPPosition({
             dev: _dev,
-            token0Collected: 0,
-            token1Collected: 0
+            tokenACollected: 0,
+            tokenBCollected: 0
         });
 
         tokenIdToLPPosition[_tokenId] = lpPosition;
@@ -71,7 +72,7 @@ contract FunLPManager is Ownable, IERC721Receiver {
     }
 
     // איסוף עמלות
-    // מאשרת שרק המפתח (dev) או בעל החוזה (owner) יכולים לאסוף את העמלות.
+    // מאשרת שרק המפתח  או בעל החוזה  יכולים לאסוף את העמלות.
     // משיכה של העמלות נעשית עבור שני סוגי המטבעות (אם יש) והשארת אחוז העמלה עבור בעל החוזה.
     function collectFees(uint256 _tokenId) external {
 
@@ -81,35 +82,26 @@ contract FunLPManager is Ownable, IERC721Receiver {
         require((msg.sender == lpPosition.dev) || (msg.sender == owner()), "LPManager: Only Dev or Owner can collect fees"); // בודקת אם מי שמבצע את הפעולה מפתח או בעל החוזה
 
     //איסוף העמלות
-    // המשתנים amount0 ו-amount1 מייצגים את הכמויות של שני סוגי הטוקנים שמתקבלים בעת איסוף העמלות מתוך הפוזיציה הבלתי ניתנת להחלפה (LP Position).
-    // amount0: מייצג את כמות הטוקן הראשון שנאסף. זה יכול להיות, למשל, ERC-20 טוקן כמו USDC, ETH, או כל טוקן אחר שמוזן לפוזיציה.
-    //amount1: מייצג את כמות הטוקן השני שנאסף, שיכול להיות טוקן אחר (למשל, DAI, WBTC או כל טוקן אחר במערכת).
+    // המשתנים amountA ו-amountB מייצגים את הכמויות של שני סוגי הטוקנים שמתקבלים בעת איסוף העמלות מתוך הפוזיציה הבלתי ניתנת להחלפה (LP Position).
+    // amountA: מייצג את כמות הטוקן הראשון שנאסף. זה יכול להיות, למשל, ERC-20 טוקן כמו USDC, ETH, או כל טוקן אחר שמוזן לפוזיציה.
+    //amountB: מייצג את כמות הטוקן השני שנאסף, שיכול להיות טוקן אחר (למשל, DAI, WBTC או כל טוקן אחר במערכת).
 
-        (uint256 amount0, uint256 amount1) = INonfungiblePositionManager(positionManager).collect(INonfungiblePositionManager.CollectParams({
-            tokenId: _tokenId,
-            recipient: address(this),
-            amount0Max: type(uint128).max,
-            amount1Max: type(uint128).max
-        }));
-
-        (,,address token0, address token1,,,,,,,,) = INonfungiblePositionManager(positionManager).positions(_tokenId);
-
-        if (amount0 > 0) {
-            uint256 feeAmount0 = (amount0 * feePer) / BASIS_POINTS;
-            IERC20(token0).transfer(owner(), feeAmount0);
-            IERC20(token0).transfer(lpPosition.dev, amount0 - feeAmount0);
-
-            emit FeesCollected(_tokenId, lpPosition.dev, token0, amount0, block.timestamp);
+        (uint256 amountA, uint256 amountB)=IPool(positionManager).claimFees();
+        (address tokenA, address tokenB) = IPool(positionManager).tokens();
+       if (amountA > 0) {
+            uint256 feeAmountA = (amountA * feePer) / BASIS_POINTS;
+            IERC20(tokenA).transfer(owner(), feeAmountA); // מעביר את סכום העמלה  לכתובת של ה-owner של החוזה.
+            IERC20(tokenA).transfer(lpPosition.dev, amountA - feeAmountA); // מעביר את יתרת הסכום לאחר ניכוי העמלה למפתח או מישהו הקשור לפוזיציה
+            // פוזיציה - כמות אחזקות בנכסים פיננסיים
+            emit FeesCollected(_tokenId, lpPosition.dev, tokenA, amountA, block.timestamp);
         }
-
-        if (amount1 > 0) {
-            uint256 feeAmount1 = (amount1 * feePer) / BASIS_POINTS;
-            IERC20(token1).transfer(owner(), feeAmount1);
-            IERC20(token1).transfer(lpPosition.dev, amount1 - feeAmount1);
-
-            emit FeesCollected(_tokenId, lpPosition.dev, token1, amount1, block.timestamp);
+        if (amountB > 0) {
+            uint256 feeAmountB = (amountB * feePer) / BASIS_POINTS;
+            IERC20(tokenB).transfer(owner(), feeAmountB);
+            IERC20(tokenB).transfer(lpPosition.dev, amountB - feeAmountB);
+            emit FeesCollected(_tokenId, lpPosition.dev, tokenB, amountB, block.timestamp);
         }
-    }
+    } 
 
     // פונקציה לקבלת NFT (onERC721Received)
     function onERC721Received(
